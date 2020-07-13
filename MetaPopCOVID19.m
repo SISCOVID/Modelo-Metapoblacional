@@ -1,12 +1,11 @@
 %% METAPOPULATION MODEL COVID 19
 % Juan D. Umaña / Daniel Duque / Diana Erazo
 clc
-clear all
 close all
 
 %% City Info
-ID = 'Barranquilla';
 route = './Data/';
+ID = 'Prueba1Nodo';
 file = '/CityInfo.xlsx';
 loc = [route,ID,file];
 CI = readtable(loc,'ReadVariableNames',0);
@@ -23,14 +22,16 @@ file = '/MovMatrix.mat';
 loc = [route,ID,file];
 load(loc);
 
-mov = {M{1},M{1}'...
-    M{3}, M{3}'...
-    M{5}, M{5}'...
-    M{7}, M{7}'...
-    M{9}, M{9}'...
-    M{11},M{11}'...
-    M{13},M{13}'...
-    M{15},M{15}'};
+% mov = {M{1},M{1}'...
+%     M{3}, M{3}'...
+%     M{5}, M{5}'...
+%     M{7}, M{7}'...
+%     M{9}, M{9}'...
+%     M{11},M{11}'...
+%     M{13},M{13}'...
+%     M{15},M{15}'};
+
+mov = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 City.name = city_name;
 
@@ -114,11 +115,11 @@ trans = b*S*(s_a*A + s_1*I1 + s_2*I2 + s_3*I3)/(N-D);
 
 dS = -trans;
 
-dE = trans - (1-p)*(1-k)*E/w - p*k*E/w;
+dE = trans - E/w;
 
-dA = (1-p)*(1-k)*E/w - r_1*A/l_1 - (1-r_1)*A/g_1;
+dA = (1-p)*E/w - r_1*A/l_1 - (1-r_1)*A/g_1;
 
-dI1 = p*k*E/w - r_1*I1/l_1 - (1-r_1)*I1/g_1;
+dI1 = p*E/w - r_1*I1/l_1 - (1-r_1)*I1/g_1;
 
 dI2 = r_1*I1/l_1 + r_1*A/l_1 - r_2*I2/l_2 - (1-r_2)*I2/g_2;
 
@@ -130,28 +131,46 @@ dD = r_3*I3/l_3;
 
 %% Fitting
 
-% for i=1:city_nodes
-%     City.node(i).beta = COVIDfitting(City.node(i));
-% end
+City.tSim = str2double(CI{6,2});
+City.nShifts = str2double(CI{7,2});
+City.dateLockDown = datetime(char(CI{8,2}),'InputFormat','dd/MM/yyyy');
+City.dateRelaxing = datetime(char(CI{9,2}),'InputFormat','dd/MM/yyyy');
+
+City.init = initialize(City,length(v_Variables));
+
+% theta.bar
+%        b1        b2        b3       phi 
+% 1.0747352 0.1858878 0.4871873 0.2280516
+
 
 %% Initial
-t = 2*365; % Number of days to simulate
-shifts = 2; % Number of shifts per day
-global shifts
-Tshifts = t*shifts; % Total number of shifts
+global Tshifts shifts
+
+shifts = City.nShifts;
+Tshifts = City.tSim*shifts; % Total number of shifts
 
 global daysSince
 daysSince = datenum(datetime('today')) - datenum(City.node(1).Dates(1));
 
-City.beta = zeros(length(City.node),Tshifts);
-City.beta(:,1:10*shifts) = 1.5;
-City.beta(:,10*shifts:daysSince*shifts) = 0.1*1.5;
-City.beta(:,daysSince*shifts:Tshifts) = 0.3*1.5;
-City.init = initialize([City.node.pop], length(v_Variables));
 
+
+daysToLD = datenum(City.dateLockDown) - datenum(City.Dates(1));
+
+daysInLD = datenum(City.dateRelaxing) - datenum(City.dateLockDown);
+
+daysRelaxed = datenum(datetime('today')) - datenum(City.dateRelaxing);
+
+global daysToLD daysInLD daysRelaxed
+
+v_PrevalenceToLD = City.Prevalence(1:daysToLD);
+v_PrevalenceInLD = City.Prevalence(daysToLD+1:daysToLD+daysInLD);
+v_PrevalenceRelaxed = City.Prevalence(daysToLD+daysInLD+1:end);
+
+% betas = COVIDfitting(City)
+betas = [1.0747352/shifts 0.1858878/shifts 0.4871873/shifts];
 
 %% Simulation
-[T,Y] = runfun(City.init,City.node,Tshifts,City.beta,City.mov,length(v_Variables));
+[T,Y] = runfun(City,City.init,City.node,Tshifts,betas,City.mov,length(v_Variables));
 City.T = T;
 City.Y = Y;
 
@@ -170,11 +189,11 @@ for f=1:5
     plot(betah(f,:))
 end
 
-idx = 1:length(Y);
-idxq = linspace(min(idx),max(idx),t);
-Ynew = interp1(idx,Y,idxq);
-
-idx = 1:length(betah);
-idxq = linspace(min(idx),max(idx),t);
-betahnew = interp1(idx,betah',idxq);
+% idx = 1:length(Y);
+% idxq = linspace(min(idx),max(idx),t);
+% Ynew = interp1(idx,Y,idxq);
+% 
+% idx = 1:length(betah);
+% idxq = linspace(min(idx),max(idx),t);
+% betahnew = interp1(idx,betah',idxq);
 
